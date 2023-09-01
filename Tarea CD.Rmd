@@ -1,0 +1,425 @@
+---
+title: "Tarea Análisis Cluster y Análisis Discriminante"
+author: "Daniel Silva Gomes de Araújo"
+date: "01/02/2023"
+output:
+  pdf_document: default
+  html_document: default
+subtitle: Master in Data Science & Bussines Analytics with R
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval=TRUE, message = FALSE)
+```
+
+## Exercise 1: 
+
+•	Seleccione una muestra de 1000 clientes para facilitar el coste computacioinal de esta tarea. Si lo desea fije una semilla para garantizar la reproducibilidad de la tarea.
+
+```{r exercise 1}
+## cargar datos
+setwd("C:\\Users\\dgoma\\Downloads\\Tarea Clasificación y Discriminación")
+rfm_data <- readRDS("rfm_data.RDS")
+set.seed(15)
+rfm_data <- rfm_data[sample(nrow(rfm_data), 1000), ]
+str(rfm_data)
+# La variable frecuencia ya esta en numeros enteros. 
+# No es necesario la conversión.
+```
+
+## Exercise 2: 
+
+•	Con muestra de clientes seleccionada realice una análisis exploratorio (EDA) de las variables.
+
+```{r exercise 2}
+## cargar datos y paquetes
+setwd("C:\\Users\\dgoma\\Downloads\\Tarea Clasificación y Discriminación")
+rfm_data <- readRDS("rfm_data.RDS")
+set.seed(15)
+rfm_data <- rfm_data[sample(nrow(rfm_data), 1000), ]
+library(ggplot2)
+library(GGally)
+
+## ggpairs
+ggpairs(rfm_data, columns = 2:4)
+
+# boxplots frequencia-monetario, frecuencia-actualidad
+rfm_data$frecuencia <- as.factor(rfm_data$frecuencia)
+ggplot(rfm_data, aes(x=frecuencia, y=monetario)) + geom_boxplot()
+ggplot(rfm_data, aes(x=frecuencia, y=actualidad)) + geom_boxplot()
+rfm_data$frecuencia <- as.numeric(rfm_data$frecuencia)
+
+# densidad monetario frequencia, actualidad
+ggplot(rfm_data, aes(x=monetario)) +
+    geom_density(fill="#69b3a2", color="#e9ecef", alpha=0.8)
+ggplot(rfm_data, aes(x=frecuencia)) +
+    geom_density(fill="#69b3a2", color="#e9ecef", alpha=0.8)
+ggplot(rfm_data, aes(x=actualidad)) +
+    geom_density(fill="#69b3a2", color="#e9ecef", alpha=0.8)
+
+# Para que no tengan mayor ponderación en la distancia aquellas variables
+# con mayor variación y para que el ordenamiento de las distancias se man- 
+# tenga se recomienda tipificar las variables,
+```
+
+## Exercise 3: 
+
+•	Para determinar en cuantos grupos puede segmentar a sus clientes en función de las variables propuestas, lleve a cabo, como primera opción, un - análisis jerárquico aglomerativo, utilizando la distancia euclídea y el método de Ward.
+
+•	A la luz de los resultados obtenidos, ¿en cuantos grupos dividiría a los clientes?
+
+```{r exercise 3}
+## cargar datos y paquetes
+setwd("C:\\Users\\dgoma\\Downloads\\Tarea Clasificación y Discriminación")
+rfm_data <- readRDS("rfm_data.RDS")
+set.seed(15)
+rfm_data <- rfm_data[sample(nrow(rfm_data), 1000), ]
+library(factoextra)
+
+## nueva tabla con datos tipificados
+codigo_socio <- rfm_data$codigo_socio
+frecuencia <- scale(rfm_data$frecuencia)
+monetario <- scale(rfm_data$monetario)
+actualidad <- scale(rfm_data$actualidad)
+rfm_data <- data.frame(codigo_socio, frecuencia, monetario, actualidad)
+x <- c("codigo_socio", "frecuencia", "monetario", "actualidad")
+colnames(rfm_data) <- x
+
+# distancia euclídea
+d.euclidea <- dist(rfm_data, method = "euclidean")
+hc.single <- hclust(d.euclidea, method = "single")
+hc.complete <- hclust(d.euclidea, method = "complete")
+hc.average <- hclust(d.euclidea, method = "average")
+layout(matrix(1:3, ncol = 3))
+plot(hc.single, main = "Single Linkage", sub = "", xlab = "", cex = 0.8)
+plot(hc.complete, main = "Complete Linkage", sub = "", xlab = "", cex = 0.8)
+plot(hc.average, main = "Average Linkage", sub = "", xlab = "", cex = 0.8)
+
+# método de Ward
+hc.ward <- hcut(rfm_data,k = 3,hc_func = "hclust",hc_metric = "euclidean",
+                hc_method = "ward.D2")
+fviz_dend(hc.ward, cex = 0.5, k = 3, color_labels_by_k = TRUE)
+
+# En los gráficos queda claro que una división en 3 o 4 clusters sería más
+# apropiada.
+```
+
+## Exercise 4: 
+
+•	Para la empresa es muy importante el número de segmentos en los que se dividen sus clientes para llevar a cabo acciones publicitarias y poder así incrementar sus beneficios.
+
+•	Compare los tres métodos heurísticos estudiados (Elbow, Silouette y GAP) para la determinación del número óptimo de clusters y, especifique, según su criterio, el número de optimo de segmentos.
+
+```{r exercise 4}
+## cargar datos y paquetes
+setwd("C:\\Users\\dgoma\\Downloads\\Tarea Clasificación y Discriminación")
+rfm_data <- readRDS("rfm_data.RDS")
+set.seed(15)
+rfm_data <- rfm_data[sample(nrow(rfm_data), 1000), ]
+library(NbClust)
+library(patchwork)
+
+# nueva tabla sin caracteres
+frecuencia <- scale(rfm_data$frecuencia)
+monetario <- scale(rfm_data$monetario)
+actualidad <- scale(rfm_data$actualidad)
+rfm_data <- data.frame(frecuencia, monetario, actualidad)
+x <- c("frecuencia", "monetario", "actualidad")
+colnames(rfm_data) <- x
+
+# metodos Elbow, Silouette y GAP
+p1 <- fviz_nbclust(rfm_data,
+FUN = hcut, method = "wss",
+k.max = 10) +
+ggtitle("Elbow")
+p2 <- fviz_nbclust(rfm_data,
+FUN = hcut, method = "silhouette",
+k.max = 10) +
+ggtitle("Silhouette")
+p3 <- fviz_nbclust(rfm_data,
+FUN = hcut, method = "gap_stat",
+k.max = 10) +
+ggtitle("Gap")
+p1 + p2 + p3
+
+# El gráfico de sedimentación y el criterio gap presentam un número óptimo
+# de 3 clusters. Yo lo dividiría los clientes en 3 grupos.
+
+# NbClust()
+NbClust(data = rfm_data, distance = "euclidean", min.nc = 2, max.nc = 6, method = "kmeans", index = "all", alphaBeale = 0.1)
+
+# Metodo k-means: Según la regla de la mayoría, el mejor número de
+# clusters es 3, confirmando la conclusión dada previamente.
+```
+
+## Exercise 5: 
+
+•	En la empresa están contentos con los resultados que ha obtenido pero desean hacer un k-means, la técnica que vienen utilizando desde hace tiempo para llevar a cabo el modelo RFM. Por ello, le piden que, en base al número de clusters optimo obtenido anteriormente lleve a cabo un k-means.
+
+•	Posteriormente, incluya al datastet original (a la muestra de 1000 clientes que seleccionó en el Ejercicio 1) la nueva variable que especifica el grupo al que pertenece cada cliente. Llame a esta variable segmento.
+
+```{r exercise 5}
+## cargar datos y paquetes
+setwd("C:\\Users\\dgoma\\Downloads\\Tarea Clasificación y Discriminación")
+rfm_data <- readRDS("rfm_data.RDS")
+set.seed(15)
+rfm_data <- rfm_data[sample(nrow(rfm_data), 1000), ]
+library(factoextra)
+
+## nueva tabla sin caracteres
+frecuencia <- scale(rfm_data$frecuencia)
+monetario <- scale(rfm_data$monetario)
+actualidad <- scale(rfm_data$actualidad)
+rfm_data <- data.frame(frecuencia, monetario, actualidad)
+x <- c("frecuencia", "monetario", "actualidad")
+colnames(rfm_data) <- x
+
+## k-means
+kmeans_tic <- eclust(rfm_data, "kmeans", k = 3)
+
+## nueva tabla con variable segmento
+segmento <- kmeans_tic$cluster
+frecuencia <- scale(rfm_data$frecuencia)
+monetario <- scale(rfm_data$monetario)
+actualidad <- scale(rfm_data$actualidad)
+rfm_data <- data.frame(frecuencia, monetario, actualidad, segmento)
+x <- c("frecuencia", "monetario", "actualidad", "segmento")
+colnames(rfm_data) <- x
+head(rfm_data)
+```
+
+## Exercise 6: 
+
+•	El Marketing Manager quiere analizar los grupos obtenidos y para ello le pide un descriptivo básico de cada grupo en función de las variables (monetario, frecuencia, actualidad). De esta forma, podrá ver en que grupo están los mejores clientes, los que solo compran una vez, los que hace mucho que no compran, los que gastan más dinero, etc.
+
+•	Además, le pide que interprete los resultados y asigne un nombre (informativo pero corto) o un acrónimo, a cada segmento obtenido.
+
+•	En el departamento de marketing están muy contentos con usted y quieren que siga trabajando como científico de datos. Ahora tienen otro reto para proponerle. Con estos mismos datos, llevar a cabo un análisis discriminante (AD). El objetivo es poder determinar si el segmento o cluster al que pertenecería cada cliente para poder asignarle una campaña de marketing lo más específica posible.
+
+```{r exercise 6}
+
+## cargar datos y paquetes
+setwd("C:\\Users\\dgoma\\Downloads\\Tarea Clasificación y Discriminación")
+rfm_data <- readRDS("rfm_data.RDS")
+set.seed(15)
+rfm_data <- rfm_data[sample(nrow(rfm_data), 1000), ]
+library(factoextra)
+library(ggpubr)
+library(MVN)
+
+## nueva tabla con variable segmento
+frecuencia <- scale(rfm_data$frecuencia)
+monetario <- scale(rfm_data$monetario)
+actualidad <- scale(rfm_data$actualidad)
+segmento <- kmeans_tic$cluster
+rfm_data <- data.frame(frecuencia, monetario, actualidad, segmento)
+x <- c("frecuencia", "monetario", "actualidad", "segmento")
+colnames(rfm_data) <- x
+
+## descriptivo basico de la variable segmento
+# La variable segmento es un factor
+rfm_data$segmento <- as.factor(rfm_data$segmento)
+p1 <- ggplot(data = rfm_data, aes(x = frecuencia, fill = segmento, colour = segmento)) +
+  geom_density(alpha = 0.3) +
+  theme_bw()
+p2 <- ggplot(data = rfm_data, aes(x = monetario, fill = segmento, colour = segmento)) +
+  geom_density(alpha = 0.3) +
+  theme_bw()
+p3 <- ggplot(data = rfm_data, aes(x = actualidad, fill = segmento, colour = segmento)) +
+  geom_density(alpha = 0.3) +
+  theme_bw()
+ggarrange(p1, p2, p3, ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom")
+rfm_data$segmento <- as.numeric(rfm_data$segmento)
+# Classificación
+# 1 - Clientes regulares (regular)
+# 2 - Clientes que llevan más tiempo sin comprar (ocasional)
+# 3 - Clientes frecuentes, gastan más dinero (frecuente)
+
+## nueva tabla con los nombres
+setwd("C:\\Users\\dgoma\\Downloads\\Tarea Clasificación y Discriminación")
+rfm_data <- readRDS("rfm_data.RDS")
+set.seed(15)
+rfm_data <- rfm_data[sample(nrow(rfm_data), 1000), ]
+frecuencia <- rfm_data$frecuencia
+monetario <- rfm_data$monetario
+actualidad <- rfm_data$actualidad
+segmento_nombre <- kmeans_tic$cluster
+segmento_nombre[segmento_nombre == "1"] <- "regular"
+segmento_nombre[segmento_nombre == "2"] <- "ocasional"
+segmento_nombre[segmento_nombre == "3"] <- "frecuente"
+segmento_nombre <- as.factor(segmento_nombre)
+rfm_data <- data.frame(segmento_nombre, frecuencia, monetario, actualidad)
+x <- c("segmento_nombre", "frecuencia", "monetario", "actualidad")
+colnames(rfm_data) <- x
+head(rfm_data)
+str(rfm_data)
+
+## análisis discriminante: diagrama de dispersion
+pairs(x = rfm_data[, -1], col = c("firebrick", "green3", "darkblue")[rfm_data$segmento_nombre], pch = 20)
+
+## análisis discriminante: q-q plot
+for (k in 2:4) {
+  j0 <- names(rfm_data)[k]
+  x0 <- seq(min(rfm_data[, k]), max(rfm_data[, k]), le = 50)
+  for (i in 1:3) {
+    i0 <- levels(rfm_data$segmento_nombre)[i]
+    x <- rfm_data[rfm_data$segmento_nombre == i0, j0]
+    qqnorm(x, main = paste(i0, j0), pch = 19, col = i + 1)
+    qqline(x)}}
+
+## análisis discriminante: estudio de outliers
+outliers <- mvn(data = rfm_data[, -1], mvnTest = "hz", multivariateOutlierMethod = "quan")
+```
+
+## Exercise 7: 
+
+•	Realice unos gráficos exploratorios para verificar los supuestos del AD vitos en teoría. Puede ayudarse de: los gráficos de densidad, representando las tres variables por segmento o grupo obtenido en el AC, la matriz de diagramas de dispersión, el análisis de outliers.
+
+```{r exercise 7}
+## cargar datos y paquetes
+setwd("C:\\Users\\dgoma\\Downloads\\Tarea Clasificación y Discriminación")
+rfm_data <- readRDS("rfm_data.RDS")
+set.seed(15)
+rfm_data <- rfm_data[sample(nrow(rfm_data), 1000), ]
+frecuencia <- rfm_data$frecuencia
+monetario <- rfm_data$monetario
+actualidad <- rfm_data$actualidad
+segmento_nombre <- kmeans_tic$cluster
+segmento_nombre[segmento_nombre == "1"] <- "regular"
+segmento_nombre[segmento_nombre == "2"] <- "ocasional"
+segmento_nombre[segmento_nombre == "3"] <- "frecuente"
+segmento_nombre <- as.factor(segmento_nombre)
+rfm_data <- data.frame(segmento_nombre, frecuencia, monetario, actualidad)
+x <- c("segmento_nombre", "frecuencia", "monetario", "actualidad")
+colnames(rfm_data) <- x
+library(ggpubr)
+library(MVN)
+
+## los gráficos de densidad, representando las tres variables por segmento o grupo obtenido en el AC
+p1 <- ggplot(data = rfm_data, aes(x = frecuencia, fill = segmento_nombre, colour = segmento_nombre)) +
+  geom_density(alpha = 0.3) +
+  theme_bw()
+p2 <- ggplot(data = rfm_data, aes(x = monetario, fill = segmento_nombre, colour = segmento_nombre)) +
+  geom_density(alpha = 0.3) +
+  theme_bw()
+p3 <- ggplot(data = rfm_data, aes(x = actualidad, fill = segmento_nombre, colour = segmento_nombre)) +
+  geom_density(alpha = 0.3) +
+  theme_bw()
+ggarrange(p1, p2, p3, ncol = 3, nrow = 1, common.legend = TRUE, legend = "bottom")
+
+## la matriz de diagramas de dispersión
+pairs(x = rfm_data[, -1], col = c("firebrick", "green3", "darkblue")[rfm_data$segmento_nombre], pch = 20)
+
+
+## el análisis de outliers
+outliers <- mvn(data = rfm_data[, -1], mvnTest = "hz", multivariateOutlierMethod = "quan")
+```
+
+## Exercise 8: 
+
+•	Para llevar a cabo el AD y poder comprobar su bondad posteriormente, divida el conjunto de datos en dos. Uno para el entrenamiento (train) de la función lineal discriminante y otro para el estudio de las predicciones (test).
+
+```{r exercise 8}
+## cargar datos y paquetes
+setwd("C:\\Users\\dgoma\\Downloads\\Tarea Clasificación y Discriminación")
+rfm_data <- readRDS("rfm_data.RDS")
+set.seed(15)
+rfm_data <- rfm_data[sample(nrow(rfm_data), 1000), ]
+frecuencia <- rfm_data$frecuencia
+monetario <- rfm_data$monetario
+actualidad <- rfm_data$actualidad
+segmento_nombre <- kmeans_tic$cluster
+segmento_nombre[segmento_nombre == "1"] <- "regular"
+segmento_nombre[segmento_nombre == "2"] <- "ocasional"
+segmento_nombre[segmento_nombre == "3"] <- "frecuente"
+segmento_nombre <- as.factor(segmento_nombre)
+rfm_data <- data.frame(segmento_nombre, frecuencia, monetario, actualidad)
+x <- c("segmento_nombre", "frecuencia", "monetario", "actualidad")
+colnames(rfm_data) <- x
+library(caret)
+
+## dividir el conjunto de datos en dos
+training_samples <- rfm_data$segmento_nombre |>
+  createDataPartition(p = 0.8, list = FALSE) # training (80%) y test (20%)
+train_data <- rfm_data[training_samples, ]
+test_data <- rfm_data[-training_samples, ]
+# Sí, conviene normalizar los datos
+
+## normalización de datos
+preproc_param <- train_data |>
+  preProcess(method = c("center", "scale"))
+train_transformed <- preproc_param |> predict(train_data)
+test_transformed <- preproc_param |> predict(test_data)
+```
+
+## Exercise 9: 
+
+•	Obtenga la función o funciones lineales discriminantes que mejor separan a sus clientes y represente los resultados gráficamente.
+
+```{r exercise 9}
+## cargar paquetes
+library(MASS)
+library(caret)
+# library(klaR)
+
+## funciones lineales discriminantes que mejor separan a sus clientes
+model_lda <- lda(segmento_nombre ~ frecuencia + monetario + actualidad, data = rfm_data)
+model_lda
+# LD1 = (-0.550321433 * frecuencia) + (-0.002545694 * monetario)  + (0.005688989 * actualidad)
+# LD2 = (-0.821043942 * frecuencia) + (-0.009057447 * monetario)  + (-0.003585961 * actualidad)
+
+## representación de los resultados gráficamente
+plot(model_lda)
+
+# partimat(segmento_nombre ~ frecuencia + monetario + actualidad, data = rfm_data, method = "lda", prec = 200, image.colors = c("darkgoldenrod1", "skyblue2", "darkgreen"), col.mean = "firebrick")
+
+```
+
+## Exercise 10: 
+
+•	Para finalizar y poder presentar sus resultados al Marketing Manager, lleve a cabo una predicción, tanto con el conjunto de train como con el de test y obtenga la matriz de confusión para poder determinar la preción del modelo en ambos conjuntos de datos (train y test).
+
+```{r exercise 10}
+## cargar datos y paquete
+setwd("C:\\Users\\dgoma\\Downloads\\Tarea Clasificación y Discriminación")
+rfm_data <- readRDS("rfm_data.RDS")
+set.seed(15)
+rfm_data <- rfm_data[sample(nrow(rfm_data), 1000), ]
+frecuencia <- rfm_data$frecuencia
+monetario <- rfm_data$monetario
+actualidad <- rfm_data$actualidad
+segmento_nombre <- kmeans_tic$cluster
+segmento_nombre[segmento_nombre == "1"] <- "regular"
+segmento_nombre[segmento_nombre == "2"] <- "ocasional"
+segmento_nombre[segmento_nombre == "3"] <- "frecuente"
+segmento_nombre <- as.factor(segmento_nombre)
+rfm_data <- data.frame(segmento_nombre, frecuencia, monetario, actualidad)
+x <- c("segmento_nombre", "frecuencia", "monetario", "actualidad")
+colnames(rfm_data) <- x
+set.seed(15)
+training_samples <- rfm_data$segmento_nombre |>
+  createDataPartition(p = 0.8, list = FALSE) # training (80%) y test (20%)
+train_data <- rfm_data[training_samples, ]
+test_data <- rfm_data[-training_samples, ]
+preproc_param <- train_data |>
+  preProcess(method = c("center", "scale"))
+train_transformed <- preproc_param |> predict(train_data)
+test_transformed <- preproc_param |> predict(test_data)
+model_lda <- lda(segmento_nombre ~ frecuencia + monetario + actualidad, data = rfm_data)
+library(caret)
+library(car)
+
+## predicción -  train - matriz de confusión
+p1 <- predict(model_lda, train_transformed)$class
+tab <- table(Predicted = p1, Actual = train_transformed$segmento_nombre)
+tab
+sum(diag(tab)) / sum(tab)
+# Precisión del modelo: 49,75%
+
+## predicción -  test - matriz de confusión
+p2 <- predict(model_lda, test_transformed)$class
+tab1 <- table(Predicted = p2, Actual = test_transformed$segmento_nombre)
+tab1
+sum(diag(tab1)) / sum(tab1)
+# Precisión del modelo: 49,49%
+```
